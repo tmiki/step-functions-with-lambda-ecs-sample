@@ -20,7 +20,7 @@ cfn-build:
 	sam build --use-container -t statemachine-sam-sample-template.yaml
 
 cfn-deploy-guided:
-	sam deploy --guided --profile $(PROFILE)
+	sam deploy --guided --stack-name $(STACK_NAME) --profile $(PROFILE)
 
 cfn-deploy:
 	sam deploy --profile $(PROFILE)

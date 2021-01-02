@@ -87,6 +87,7 @@ $ make cfn-build
 4. Deploy the SAM app along with the guide.
 
 At your first time, you need to run the "sam deploy" command with its guide.  
+Please leave all values except the "AWS Region". You need to specify the AWS Region you want to deploy.
 
 ```
 $ cd ./sam-sample-input-output/
