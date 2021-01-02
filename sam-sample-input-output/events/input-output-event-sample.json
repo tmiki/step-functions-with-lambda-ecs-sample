@@ -1,0 +1,14 @@
+{
+    "comment": "This JSON should be input for each task integration.",
+    "LambdaInputOutputFunctionParameters": {
+        "val1": 1,
+        "val2": 2,
+        "val3": 3,
+        "InputOutput2FunctionSucceed": true
+    },
+    "ECSInputOutputTaskParameters": {
+        "val1": "a",
+        "val2": "b",
+        "val3": "c"
+    }
+}

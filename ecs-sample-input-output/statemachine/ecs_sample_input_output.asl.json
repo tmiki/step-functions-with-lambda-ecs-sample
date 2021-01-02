@@ -1,0 +1,141 @@
+{
+    "Comment": "An AWS Step Functions sample project along with ECS.",
+    "StartAt": "Run Fargate Task 1 successful",
+    "TimeoutSeconds": 3600,
+    "States": {
+        "Run Fargate Task 1 successful": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::ecs:runTask.sync",
+            "Parameters": {
+                "LaunchType": "FARGATE",
+                "Cluster": "${EcsClusterArn}",
+                "TaskDefinition": "${EcsTaskDefinitionArn}",
+                "Overrides": {
+                    "ContainerOverrides": [
+                        {
+                            "Name": "${EcrRepository}",
+                            "Command": [
+                                "--succeed",
+                                "Command overridden. This task will succeed."
+                            ]
+                        }
+                    ]
+                },
+                "NetworkConfiguration": {
+                    "AwsvpcConfiguration": {
+                        "Subnets": [
+                            "${VpcSubnet1}",
+                            "${VpcSubnet2}"
+                        ],
+                        "SecurityGroups":[
+                            "${SecurityGroupInternal}"
+                        ],
+                        "AssignPublicIp": "ENABLED"
+                    }
+                }
+            },
+            "ResultPath": "$.EcsTask1Output",
+            "Next": "Decide wether the Task 2 fails"
+        },
+        "Decide wether the Task 2 fails": {
+            "Type": "Choice",
+            "Choices": [
+                {
+                    "Variable": "$.EcsInputOutputTaskParameters.EcsTask2Succeed",
+                    "BooleanEquals": true,
+                    "Next": "Run Fargate Task 2 successful"
+                }
+            ],
+            "Default": "Run Fargate Task 2 failed"
+        },
+        "Run Fargate Task 2 successful": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::ecs:runTask.sync",
+            "Parameters": {
+                "LaunchType": "FARGATE",
+                "Cluster": "${EcsClusterArn}",
+                "TaskDefinition": "${EcsTaskDefinitionArn}",
+                "Overrides": {
+                    "ContainerOverrides": [
+                        {
+                            "Name": "${EcrRepository}",
+                            "Command": [
+                                "--succeed",
+                                "Command overridden. This task will succeed."
+                            ]
+                        }
+                    ]
+                },
+                "NetworkConfiguration": {
+                    "AwsvpcConfiguration": {
+                        "Subnets": [
+                            "${VpcSubnet1}",
+                            "${VpcSubnet2}"
+                        ],
+                        "SecurityGroups":[
+                            "${SecurityGroupInternal}"
+                        ],
+                        "AssignPublicIp": "ENABLED"
+                    }
+                }
+            },
+            "ResultPath": "$.EcsTask2Output",
+            "Next": "Check Result of all the ECS Tasks"
+        },
+        "Run Fargate Task 2 failed": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::ecs:runTask.sync",
+            "Parameters": {
+                "LaunchType": "FARGATE",
+                "Cluster": "${EcsClusterArn}",
+                "TaskDefinition": "${EcsTaskDefinitionArn}",
+                "Overrides": {
+                    "ContainerOverrides": [
+                        {
+                            "Name": "${EcrRepository}",
+                            "Command": [
+                                "Command overridden. This task will fail."
+                            ]
+                        }
+                    ]
+                },
+                "NetworkConfiguration": {
+                    "AwsvpcConfiguration": {
+                        "Subnets": [
+                            "${VpcSubnet1}",
+                            "${VpcSubnet2}"
+                        ],
+                        "SecurityGroups":[
+                            "${SecurityGroupInternal}"
+                        ],
+                        "AssignPublicIp": "ENABLED"
+                    }
+                }
+            },
+            "ResultPath": "$.EcsTask2Output",
+            "Next": "Check Result of all the ECS Tasks",
+            "Catch": [
+                {
+                    "ErrorEquals": ["States.ALL"],
+                    "Next": "Detect Failure",
+                    "ResultPath": "$.EcsTask2Failure"
+                }
+            ]
+        },
+        "Detect Failure": {
+            "Type": "Pass",
+            "Parameters": {
+                "Message": "An ECS Task has failed."
+            },
+            "ResultPath": "$.EcsTask2AfterFailure",
+            "Next": "Check Result of all the ECS Tasks"
+        },
+        "Check Result of all the ECS Tasks": {
+            "Type": "Pass",
+            "Parameters": {
+                "Message": "ECS Tasks have finished."
+            },
+            "End": true
+        }
+    }
+}

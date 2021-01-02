@@ -1,0 +1,58 @@
+{
+    "Comment": "A state machine demonstrates how a Lambda function receives input and returns output.",
+    "StartAt": "Lambda function 1",
+    "States": {
+        "Lambda function 1": {
+            "Comment": "The 1st Lambda function.",
+            "Type": "Task",
+            "Resource": "${InputOutput1FunctionArn}",
+            "Parameters": {
+                "Parameters.$": "$.LambdaInputOutputFunctionParameters"
+            },
+            "ResultSelector": {
+                "Lambda1ExitCode.$": "$.exit_code",
+                "Lambda1Message.$": "$.message",
+                "Lambda1Return2.$": "$.result_detail.return2"
+            },
+            "ResultPath": "$.Lambda1Output",
+            "Next" : "Reconstruct States"
+        },
+        "Reconstruct States": {
+            "Type": "Pass",
+            "Parameters": {
+                "FunctionWillSucceed.$": "$.LambdaInputOutputFunctionParameters.InputOutput2FunctionSucceed"
+            },
+            "ResultPath": "$.Lambda2Control",
+            "Next": "Lambda function 2"
+        },
+        "Lambda function 2": {
+            "Comment": "The 2nd Lambda function.",
+            "Type": "Task",
+            "Resource": "${InputOutput2FunctionArn}",
+            "Parameters": {
+                "Lambda2Parameters.$": "$.Lambda1Output",
+                "WillSucceed.$": "$.Lambda2Control.FunctionWillSucceed"
+            },
+            "ResultPath": "$.Lambda2Output",
+            "Next": "Check whether Lambda function 2 succeed"
+        },
+        "Check whether Lambda function 2 succeed": {
+            "Type": "Choice",
+            "Choices": [
+                {
+                    "Variable": "$.Lambda2Output.exit_code",
+                    "NumericEquals": 0,
+                    "Next": "End with Success"
+                }
+            ],
+            "Default": "End with Failure"
+        },
+        "End with Success":{
+            "Type": "Succeed"
+        },
+        "End with Failure":{
+            "Type": "Fail"
+        }
+
+    }
+}

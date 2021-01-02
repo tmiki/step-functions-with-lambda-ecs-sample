@@ -1,0 +1,19 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AWSLogDeliveryWriteSamSampleStateMachine",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "delivery.logs.amazonaws.com"
+      },
+      "Action": [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": [
+        "arn:aws:logs:${AWS_REGION}:${AWS_ACCOUNT_ID}:log-group:/aws/vendedlogs/states/SamInputOutputStateMachine-Logs:log-stream:*"
+      ]
+    }
+  ]
+}

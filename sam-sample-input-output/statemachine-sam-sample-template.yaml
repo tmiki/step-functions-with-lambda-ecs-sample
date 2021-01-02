@@ -1,0 +1,122 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Sample SAM Template with a Step Functions State Machine and 2 Lambda funcitons.
+
+# --------------------------------------------------------------------------------
+# Parameters/Mappings/Conditions
+# --------------------------------------------------------------------------------
+Parameters:
+  StateMachineLogGroupName:
+    Description: A CloudWatch LogGroup where the State Machine put its logs into.
+    Type: String
+    Default: "/aws/vendedlogs/states/SamInputOutputStateMachine-Logs"
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 3
+
+# --------------------------------------------------------------------------------
+# Resources
+# --------------------------------------------------------------------------------
+Resources:
+  InputOutput1Function:
+    # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: input_output1/
+      Handler: app.lambda_handler
+      Runtime: python3.8
+
+  InputOutput2Function:
+    # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: input_output2/
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      
+
+  SamInputOutputStateMachineRole:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-iam-role.html
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - states.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: AllowInvokeLambdaFunctions
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: 'Allow'
+                Action: 'lambda:InvokeFunction'
+                Resource:
+                  - !GetAtt InputOutput1Function.Arn
+                  - !GetAtt InputOutput2Function.Arn
+        - PolicyName: CloudWatchLogsDeliverlyFullAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              # https://docs.aws.amazon.com/step-functions/latest/dg/cw-logs.html#cloudwatch-iam-policy
+              - Effect: 'Allow'
+                Action:
+                - "logs:CreateLogDelivery"
+                - "logs:GetLogDelivery"
+                - "logs:UpdateLogDelivery"
+                - "logs:DeleteLogDelivery"
+                - "logs:ListLogDeliveries"
+                - "logs:PutResourcePolicy"
+                - "logs:DescribeResourcePolicies"
+                - "logs:DescribeLogGroups"
+                Resource: "*"
+        - PolicyName: AllowCloudWatchLogsPutLogEvents
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                - "logs:PutLogEvents"
+                Resource: !GetAtt SamInputOutputStateMachineLogGroup.Arn
+                # Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/vendedlogs/states/InputOutputStateMachine-Logs:*"
+
+  SamInputOutputStateMachineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties: 
+      LogGroupName: !Ref StateMachineLogGroupName
+      RetentionInDays: 14
+
+  SamInputOutputStateMachine:
+    # More info about State Machine Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-statemachine.html
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      DefinitionUri: 'statemachine/sample_input_output.asl.json'
+      DefinitionSubstitutions:
+        InputOutput1FunctionArn: !GetAtt InputOutput1Function.Arn
+        InputOutput2FunctionArn: !GetAtt InputOutput2Function.Arn
+      Logging:
+        Destinations:
+        - CloudWatchLogsLogGroup:
+            LogGroupArn: !GetAtt SamInputOutputStateMachineLogGroup.Arn
+        IncludeExecutionData: true
+        Level: "ALL"
+      Role: !GetAtt SamInputOutputStateMachineRole.Arn
+
+# --------------------------------------------------------------------------------
+# Outputs
+# --------------------------------------------------------------------------------
+Outputs:
+  InputOutput1Function:
+    Description: "InputOutput1Function ARN"
+    Value: !GetAtt InputOutput1Function.Arn
+  InputOutput2Function:
+    Description: "InputOutput2Function ARN"
+    Value: !GetAtt InputOutput2Function.Arn

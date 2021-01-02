@@ -1,0 +1,89 @@
+{
+    "capacityProviderStrategy": [
+        {
+            "capacityProvider": "",
+            "weight": 0,
+            "base": 0
+        }
+    ],
+    "cluster": "",
+    "count": 0,
+    "enableECSManagedTags": true,
+    "group": "",
+    "launchType": "FARGATE",
+    "networkConfiguration": {
+        "awsvpcConfiguration": {
+            "subnets": [
+                ""
+            ],
+            "securityGroups": [
+                ""
+            ],
+            "assignPublicIp": "ENABLED"
+        }
+    },
+    "overrides": {
+        "containerOverrides": [
+            {
+                "name": "",
+                "command": [
+                    ""
+                ],
+                "environment": [
+                    {
+                        "name": "",
+                        "value": ""
+                    }
+                ],
+                "environmentFiles": [
+                    {
+                        "value": "",
+                        "type": "s3"
+                    }
+                ],
+                "cpu": 0,
+                "memory": 0,
+                "memoryReservation": 0,
+                "resourceRequirements": [
+                    {
+                        "value": "",
+                        "type": "InferenceAccelerator"
+                    }
+                ]
+            }
+        ],
+        "cpu": "",
+        "inferenceAcceleratorOverrides": [
+            {
+                "deviceName": "",
+                "deviceType": ""
+            }
+        ],
+        "executionRoleArn": "",
+        "memory": "",
+        "taskRoleArn": ""
+    },
+    "placementConstraints": [
+        {
+            "type": "distinctInstance",
+            "expression": ""
+        }
+    ],
+    "placementStrategy": [
+        {
+            "type": "binpack",
+            "field": ""
+        }
+    ],
+    "platformVersion": "",
+    "propagateTags": "SERVICE",
+    "referenceId": "",
+    "startedBy": "",
+    "tags": [
+        {
+            "key": "",
+            "value": ""
+        }
+    ],
+    "taskDefinition": ""
+}

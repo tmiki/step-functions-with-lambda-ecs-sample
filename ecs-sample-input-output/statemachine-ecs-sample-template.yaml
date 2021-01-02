@@ -1,0 +1,557 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: AWS Step Functions sample project along with ECS.
+
+# This CloudFormation stack referes to the documents below.
+# https://docs.aws.amazon.com/step-functions/latest/dg/connect-ecs.html
+# https://docs.aws.amazon.com/step-functions/latest/dg/sample-project-container-task-notification.html
+
+# --------------------------------------------------------------------------------
+# Parameters/Mappings/Conditions
+# --------------------------------------------------------------------------------
+Parameters:
+  AppName:
+    Description: Application name.
+    Type: String
+    Default: "Step Functions with ECS sample"
+  EcrRepositoryName:
+    Description: An ECR Repository name to push a sample app.
+    Type: String
+    Default: "ecs-input-output1"
+  EcsTaskLogGroupName:
+    Description: A CloudWatch LogGroup where ECS tasks put their logs into.
+    Type: String
+    Default: "/ecs/ecs-input-output1"
+  StateMachineLogGroupName:
+    Description: A CloudWatch LogGroup where the State Machine put its logs into.
+    Type: String
+    Default: "/aws/vendedlogs/states/EcsInputOutputStateMachine-Logs"
+  VpcCidr:
+    Description: "A CIDR range of the entire VPC."
+    Type: String
+    Default: 172.16.0.0/20
+
+# --------------------------------------------------------------------------------
+# Resources
+# --------------------------------------------------------------------------------
+Resources:
+  # 
+  # A State Machine and its related resources.
+  # 
+  EcsInputOutputStateMachine:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-stepfunctions-statemachine.html
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      # https://docs.aws.amazon.com/step-functions/latest/dg/connect-ecs.html
+      DefinitionString: |
+        {
+            "Comment": "An AWS Step Functions sample project along with ECS.",
+            "StartAt": "Run Fargate Task 1 successful",
+            "TimeoutSeconds": 3600,
+            "States": {
+                "Run Fargate Task 1 successful": {
+                    "Type": "Task",
+                    "Resource": "arn:aws:states:::ecs:runTask.sync",
+                    "Parameters": {
+                        "LaunchType": "FARGATE",
+                        "Cluster": "${EcsClusterArn}",
+                        "TaskDefinition": "${EcsTaskDefinitionArn}",
+                        "Overrides": {
+                            "ContainerOverrides": [
+                                {
+                                    "Name": "${EcrRepository}",
+                                    "Command": [
+                                        "--succeed",
+                                        "Command overridden. This task will succeed."
+                                    ]
+                                }
+                            ]
+                        },
+                        "NetworkConfiguration": {
+                            "AwsvpcConfiguration": {
+                                "Subnets": [
+                                    "${VpcSubnet1}",
+                                    "${VpcSubnet2}"
+                                ],
+                                "SecurityGroups":[
+                                    "${SecurityGroupInternal}"
+                                ],
+                                "AssignPublicIp": "ENABLED"
+                            }
+                        }
+                    },
+                    "ResultPath": "$.EcsTask1Output",
+                    "Next": "Decide wether the Task 2 fails"
+                },
+                "Decide wether the Task 2 fails": {
+                    "Type": "Choice",
+                    "Choices": [
+                        {
+                            "Variable": "$.EcsInputOutputTaskParameters.EcsTask2Succeed",
+                            "BooleanEquals": true,
+                            "Next": "Run Fargate Task 2 successful"
+                        }
+                    ],
+                    "Default": "Run Fargate Task 2 failed"
+                },
+                "Run Fargate Task 2 successful": {
+                    "Type": "Task",
+                    "Resource": "arn:aws:states:::ecs:runTask.sync",
+                    "Parameters": {
+                        "LaunchType": "FARGATE",
+                        "Cluster": "${EcsClusterArn}",
+                        "TaskDefinition": "${EcsTaskDefinitionArn}",
+                        "Overrides": {
+                            "ContainerOverrides": [
+                                {
+                                    "Name": "${EcrRepository}",
+                                    "Command": [
+                                        "--succeed",
+                                        "Command overridden. This task will succeed."
+                                    ]
+                                }
+                            ]
+                        },
+                        "NetworkConfiguration": {
+                            "AwsvpcConfiguration": {
+                                "Subnets": [
+                                    "${VpcSubnet1}",
+                                    "${VpcSubnet2}"
+                                ],
+                                "SecurityGroups":[
+                                    "${SecurityGroupInternal}"
+                                ],
+                                "AssignPublicIp": "ENABLED"
+                            }
+                        }
+                    },
+                    "ResultPath": "$.EcsTask2Output",
+                    "Next": "Check Result of all the ECS Tasks"
+                },
+                "Run Fargate Task 2 failed": {
+                    "Type": "Task",
+                    "Resource": "arn:aws:states:::ecs:runTask.sync",
+                    "Parameters": {
+                        "LaunchType": "FARGATE",
+                        "Cluster": "${EcsClusterArn}",
+                        "TaskDefinition": "${EcsTaskDefinitionArn}",
+                        "Overrides": {
+                            "ContainerOverrides": [
+                                {
+                                    "Name": "${EcrRepository}",
+                                    "Command": [
+                                        "Command overridden. This task will fail."
+                                    ]
+                                }
+                            ]
+                        },
+                        "NetworkConfiguration": {
+                            "AwsvpcConfiguration": {
+                                "Subnets": [
+                                    "${VpcSubnet1}",
+                                    "${VpcSubnet2}"
+                                ],
+                                "SecurityGroups":[
+                                    "${SecurityGroupInternal}"
+                                ],
+                                "AssignPublicIp": "ENABLED"
+                            }
+                        }
+                    },
+                    "ResultPath": "$.EcsTask2Output",
+                    "Next": "Check Result of all the ECS Tasks",
+                    "Catch": [
+                        {
+                            "ErrorEquals": ["States.ALL"],
+                            "Next": "Detect Failure",
+                            "ResultPath": "$.EcsTask2Failure"
+                        }
+                    ]
+                },
+                "Detect Failure": {
+                    "Type": "Pass",
+                    "Parameters": {
+                        "Message": "An ECS Task has failed."
+                    },
+                    "ResultPath": "$.EcsTask2AfterFailure",
+                    "Next": "Check Result of all the ECS Tasks"
+                },
+                "Check Result of all the ECS Tasks": {
+                    "Type": "Pass",
+                    "Parameters": {
+                        "Message": "ECS Tasks have finished."
+                    },
+                    "End": true
+                }
+            }
+        }
+      DefinitionSubstitutions:
+        EcsClusterArn: !GetAtt EcsCluster.Arn
+        EcsTaskDefinitionArn: !Ref EcsTaskDefinition
+        EcrRepository: !Ref EcrRepositoryName
+        VpcSubnet1: !Ref VpcSubnet1
+        VpcSubnet2: !Ref VpcSubnet2
+        SecurityGroupInternal: !Ref SecurityGroupInternal
+      LoggingConfiguration:
+        # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-stepfunctions-statemachine-loggingconfiguration.html
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt StateMachineLogGroup.Arn
+        IncludeExecutionData: true
+        Level: "ALL"
+      RoleArn: !GetAtt StateMachineRole.Arn
+
+  StateMachineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties: 
+      LogGroupName: !Ref StateMachineLogGroupName
+      RetentionInDays: 14
+
+  StateMachineRole:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-iam-role.html
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - states.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        # https://docs.aws.amazon.com/step-functions/latest/dg/sample-project-container-task-notification.html
+        - PolicyName: FargateTaskInvocation
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "ecs:RunTask"
+                Resource:
+                  - !Ref EcsTaskDefinition
+              - Effect: "Allow"
+                Action:
+                  - "ecs:StopTask"
+                  - "ecs:DescribeTasks"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "events:PutTargets"
+                  - "events:PutRule"
+                  - "events:DescribeRule"
+                Resource:
+                  - !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/StepFunctionsGetEventsForECSTaskRule"
+              - Effect: Allow
+                Action:
+                  - "iam:PassRole"
+                Resource:
+                  - !GetAtt EcsTaskExecutionRole.Arn
+                  - !GetAtt EcsTaskRole.Arn
+        - PolicyName: CloudWatchLogsDeliverlyFullAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # https://docs.aws.amazon.com/step-functions/latest/dg/cw-logs.html#cloudwatch-iam-policy
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogDelivery"
+                  - "logs:GetLogDelivery"
+                  - "logs:UpdateLogDelivery"
+                  - "logs:DeleteLogDelivery"
+                  - "logs:ListLogDeliveries"
+                  - "logs:PutResourcePolicy"
+                  - "logs:DescribeResourcePolicies"
+                  - "logs:DescribeLogGroups"
+                Resource: "*"
+
+  # 
+  # An ECS cluster and its related resources.
+  # 
+  EcrRepository:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ecr-repository.html
+    Type: AWS::ECR::Repository
+    Properties: 
+      ImageTagMutability: "MUTABLE"
+      RepositoryName: !Ref EcrRepositoryName
+      Tags: 
+        - Key: "Name"
+          Value: !Sub "${EcrRepositoryName} of ${AppName}"
+
+  EcsCluster:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ecs-cluster.html
+    Type: AWS::ECS::Cluster
+    Properties:
+      Tags: 
+        - Key: "Name"
+          Value: !Sub "${AppName}"
+
+  EcsTaskLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties: 
+      LogGroupName: !Ref EcsTaskLogGroupName
+      RetentionInDays: 14
+
+  EcsTaskDefinition:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ecs-taskdefinition.html
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      ContainerDefinitions:
+        # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ecs-taskdefinition-containerdefinitions.html
+        - Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrRepositoryName}:latest"
+          Name: !Ref EcrRepositoryName
+          Essential: true
+          EntryPoint:
+            - "/usr/bin/python3.8"
+            - "main.py"
+          Command:
+            - "--succeed"
+            - "Hello from an ECS Task for Step Functions."
+          LogConfiguration:
+            # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ecs-taskdefinition-containerdefinitions-logconfiguration.html
+            # https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_LogConfiguration.html
+            LogDriver: "awslogs"
+            Options:
+                awslogs-group: !Ref EcsTaskLogGroupName
+                awslogs-region: !Ref AWS::Region
+                awslogs-stream-prefix: !Ref AWS::StackName
+      Cpu: 256
+      Memory: 512
+      RequiresCompatibilities:
+        - "FARGATE"
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !GetAtt EcsTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt EcsTaskRole.Arn
+
+  EcsTaskExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs.amazonaws.com
+                - ecs-tasks.amazonaws.com
+            Action: "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: AllowPullingImagesFromEcr
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # https://docs.aws.amazon.com/AmazonECR/latest/userguide/security_iam_id-based-policy-examples.html#security_iam_id-based-policy-examples-access-one-bucket
+              - Effect: Allow
+                Action:
+                  - "ecr:GetAuthorizationToken"
+                Resource:
+                  - "*"
+              - Effect: Allow
+                Action:
+                  - "ecr:ListImages"
+                Resource:
+                  - !Sub "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${EcrRepositoryName}"
+              - Effect: Allow
+                Action:
+                  - "ecr:BatchCheckLayerAvailability"
+                  - "ecr:GetDownloadUrlForLayer"
+                  - "ecr:GetRepositoryPolicy"
+                  - "ecr:DescribeRepositories"
+                  - "ecr:ListImages"
+                  - "ecr:DescribeImages"
+                  - "ecr:BatchGetImage"
+                  - "ecr:InitiateLayerUpload"
+                  - "ecr:UploadLayerPart"
+                  - "ecr:CompleteLayerUpload"
+                  - "ecr:PutImage"
+                Resource:
+                  - !Sub "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${EcrRepositoryName}"
+        - PolicyName: AllowPuttingLogs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "*"
+
+  EcsTaskRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - ecs.amazonaws.com
+                - ecs-tasks.amazonaws.com
+            Action: "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: AllowS3Access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "s3:Get*"
+                  - "s3:List*"
+                Resource: "*"
+
+  #
+  # A VPC and its related resources.
+  #
+  VPC:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-vpc.html
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: "Name"
+          Value: !Ref AppName
+
+  VpcSubnet1:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-subnet.html
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      MapPublicIpOnLaunch: true
+      AvailabilityZone:
+        # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference-getavailabilityzones.html
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      CidrBlock:
+        # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference-cidr.html
+        Fn::Select:
+          - 0
+          - !Cidr [!Ref VpcCidr, 8, 8]
+      Tags:
+        - Key: "Name"
+          Value: !Sub "Public Subnet 1 of ${AppName}"
+
+  VpcSubnet2:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-subnet.html
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      MapPublicIpOnLaunch: true
+      AvailabilityZone:
+        # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference-getavailabilityzones.html
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ""
+      CidrBlock:
+        # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference-cidr.html
+        Fn::Select:
+          - 1
+          - !Cidr [!Ref VpcCidr, 8, 8]
+      Tags:
+        - Key: "Name"
+          Value: !Sub "Public Subnet 2 of ${AppName}"
+
+  InternetGateway:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-internetgateway.html
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${AppName}"
+
+  InternetGatewayAttachment:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-vpc-gateway-attachment.html
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-route-table.html
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: "Name"
+          Value: !Sub "Public Route of ${AppName}"
+
+  DefaultPublicRoute:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-route.html
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  VpcSubnet1RouteTableAssociation:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-subnet-route-table-assoc.html
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref VpcSubnet1
+
+  VpcSubnet2RouteTableAssociation:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-subnet-route-table-assoc.html
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref VpcSubnet2
+
+  SecurityGroupInternal:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupName: !Sub ${AppName} Internal
+      GroupDescription: "Allow all traffic from and to each other within the VPC."
+      SecurityGroupIngress:
+        - CidrIp: !Ref VpcCidr
+          IpProtocol: "-1"
+          FromPort: -1
+          ToPort: -1
+
+  SecurityGroupPublicWeb:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupName: !Sub ${AppName} PublicWeb
+      GroupDescription: "Allow HTTP/HTTPS traffic from the Internet to the Web servers."
+      SecurityGroupIngress:
+        - CidrIp: "0.0.0.0/0"
+          IpProtocol: "tcp"
+          FromPort: 80
+          ToPort: 80
+        - CidrIp: "0.0.0.0/0"
+          IpProtocol: "tcp"
+          FromPort: 443
+          ToPort: 443
+
+# --------------------------------------------------------------------------------
+# Outputs
+# --------------------------------------------------------------------------------
+Outputs:
+  VpcId:
+    Value: !Ref VPC
+  VpcSubnet1:
+    Value: !Ref VpcSubnet1
+  VpcSubnet2:
+    Value: !Ref VpcSubnet2
+  SecurityGroupInternal:
+    Value: !Ref SecurityGroupInternal
+  EcsClusterId:
+    Value: !Ref EcsCluster
+  EcsClusterArn:
+    Value: !GetAtt EcsCluster.Arn
+  EcsTaskDefinitionArn:
+    Value: !Ref EcsTaskDefinition
+  EcrUri:
+    Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrRepositoryName}"
+  EcrLoginUri:
+    Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com"
+

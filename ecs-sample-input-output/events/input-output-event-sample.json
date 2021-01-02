@@ -1,0 +1,9 @@
+{
+    "comment": "This JSON should be input for each task integration.",
+    "EcsInputOutputTaskParameters": {
+        "val1": 1,
+        "val2": 2,
+        "val3": 3,
+        "EcsTask2Succeed": false
+    }
+}

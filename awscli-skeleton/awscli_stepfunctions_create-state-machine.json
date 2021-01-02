@@ -1,0 +1,23 @@
+{
+    "name": "",
+    "definition": "",
+    "roleArn": "",
+    "type": "STANDARD",
+    "loggingConfiguration": {
+        "level": "ALL",
+        "includeExecutionData": true,
+        "destinations": [
+            {
+                "cloudWatchLogsLogGroup": {
+                    "logGroupArn": ""
+                }
+            }
+        ]
+    },
+    "tags": [
+        {
+            "key": "",
+            "value": ""
+        }
+    ]
+}
