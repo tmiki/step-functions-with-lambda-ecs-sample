@@ -1,5 +1,3 @@
-# looking-into-step-functions
-
 # Overview
 This project consists of 2 applications. There are some purposes below.
 
